@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BRSP02 — Mapa do Sorter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --green: #1db954;
+    --green-dark: #158a3e;
+    --yellow: #f5d800;
+    --bg: #1a1a1a;
+    --surface: #242424;
+    --surface2: #2e2e2e;
+    --border: #3a3a3a;
+    --text: #e8e8e8;
+    --muted: #888;
+    --toboga-w: 52px;
+    --toboga-h: 110px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--surface);
+    border-bottom: 2px solid var(--yellow);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.05em; }
+  .logo span { color: var(--yellow); }
+  .badge { background: var(--yellow); color: #111; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 2px; letter-spacing: 0.08em; }
+
+  .search-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  #search {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 7px 14px;
+    border-radius: 3px;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #search:focus { border-color: var(--green); }
+  #search::placeholder { color: var(--muted); }
+
+  .search-result {
+    font-size: 0.75rem;
+    color: var(--green);
+    min-width: 160px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 10px 22px;
+    font-size: 0.78rem;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .tab.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ─── MAP ─────────────────────────────────────────────── */
+  .map-container {
+    padding: 24px 28px;
+    overflow-x: auto;
+  }
+
+  .map-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .sorter-map {
+    background: #2a2a2a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 20px 20px;
+    position: relative;
+    min-width: 900px;
+  }
+
+  /* conveyor rail */
+  .rail {
+    position: relative;
+    height: 8px;
+    background: var(--green);
+    border-radius: 4px;
+    margin: 0 10px;
+  }
+
+  .tobogans-row {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    padding-bottom: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .toboga {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.15s;
+  }
+  .toboga:hover { transform: translateY(-3px); }
+  .toboga.highlighted .chute { background: var(--yellow); border-color: var(--yellow); }
+  .toboga.highlighted .t-num { color: var(--yellow); }
+  .toboga.active .chute { background: var(--green); border-color: var(--green); box-shadow: 0 0 12px rgba(29,185,84,0.5); }
+  .toboga.active .t-num { color: var(--green); font-weight: 700; }
+
+  .t-num {
+    font-size: 0.6rem;
+    color: var(--muted);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    margin-bottom: 4px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .chute {
+    width: 18px;
+    height: 80px;
+    background: #3a5e3a;
+    border: 2px solid var(--green-dark);
+    border-radius: 3px 3px 6px 6px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .section-divider {
+    width: 1px;
+    height: 80px;
+    background: var(--border);
+    margin: 0 6px;
+    align-self: flex-end;
+    flex-shrink: 0;
+  }
+
+  /* tooltip */
+  .tooltip {
+    position: fixed;
+    background: #111;
+    border: 1px solid var(--green);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 0.72rem;
+    max-width: 320px;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .t-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  .tooltip .t-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .t-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+    color: var(--text);
+  }
+
+  /* info panel below map */
+  .info-panel {
+    margin: 0 28px 20px;
+    background: var(--surface);
+    border: 1px solid var(--green);
+    border-radius: 6px;
+    padding: 16px 20px;
+    display: none;
+  }
+  .info-panel.visible { display: block; }
+  .info-panel h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--green);
+    margin-bottom: 10px;
+  }
+  .tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .big-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    color: var(--text);
+  }
+
+  /* ─── TABLE ─────────────────────────────────────────────── */
+  .table-wrap {
+    padding: 24px 28px;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--yellow);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--yellow);
+    position: sticky; top: 0;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.highlighted { background: rgba(245,216,0,0.08); }
+  tbody tr.highlighted td:first-child { color: var(--yellow); font-weight: 700; }
+  td { padding: 9px 14px; vertical-align: top; }
+  td:first-child { color: var(--green); font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
+  .canal-count { color: var(--muted); font-size: 0.7rem; }
+  .canal-list { color: #ccc; line-height: 1.6; }
+
+  /* ─── STATS ─────────────────────────────────────────────── */
+  .stats-wrap {
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px;
+  }
+  .stat-card .s-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--green);
+  }
+  .stat-card .s-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .top-list { padding: 0 28px 28px; }
+  .top-list h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .top-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+  }
+  .top-item .ti-num { color: var(--green); font-weight: 700; min-width: 36px; }
+  .top-item .ti-bar-wrap { flex: 1; }
+  .ti-bar { height: 6px; background: var(--green); border-radius: 3px; transition: width 0.6s; }
+  .ti-count { color: var(--muted); min-width: 30px; text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">BRSP02 <span>·</span> GLP Cajamar II</div>
+  <div class="search-wrap">
+    <input id="search" type="text" placeholder="Buscar canalização ex: SSP17..." autocomplete="off">
+    <div class="search-result" id="searchResult"></div>
+  </div>
+  <div class="badge">CONFIGURAÇÃO ATIVA</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('map')">🗺 Mapa Visual</div>
+  <div class="tab" onclick="switchTab('table')">📋 Tabela</div>
+  <div class="tab" onclick="switchTab('stats')">📊 Estatísticas</div>
+</div>
+
+<!-- MAP PANEL -->
+<div id="panel-map" class="panel active">
+  <div class="map-container">
+    <div class="map-label">Seção 1 — Tobogãs 101–169</div>
+    <div class="sorter-map" id="map1"></div>
+    <br>
+    <div class="map-label" style="margin-top:8px">Seção 2 — Tobogãs 202–260</div>
+    <div class="sorter-map" id="map2"></div>
+  </div>
+  <div class="info-panel" id="infoPanel">
+    <h3 id="infoPanelTitle"></h3>
+    <div class="tags-wrap" id="infoPanelTags"></div>
+  </div>
+</div>
+
+<!-- TABLE PANEL -->
+<div id="panel-table" class="panel">
+  <div class="table-wrap">
+    <table id="mainTable">
+      <thead>
+        <tr>
+          <th>Tobogã</th>
+          <th>Qtd</th>
+          <th>Canalizações</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- STATS PANEL -->
+<div id="panel-stats" class="panel">
+  <div class="stats-wrap" id="statsCards"></div>
+  <div class="top-list">
+    <h3>Top 10 — Tobogãs com mais canalizações</h3>
+    <div id="topList"></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {
+  101: ["JETBA3","SMR1","SRJ3_CHP","SRJ5","SSP22_CHP","SSP36_S","SSP40","SSP40_V"],
+  103: ["SMG14","SRJ1","SRS10","SSP15","SSP17_CHP"],
+  105: ["SMR1","SPR2","SRJ1_CHP","SSP49"],
+  107: ["SMG6","SRS7","SSP12_CHP","SSP23_S","SSP5","SSP5_V","SSP9","SSP9_V"],
+  109: ["SSP13","SSP30_S","SSP48"],
+  111: ["JETRD1","SBA1","SSC1","SSP15_CHP","SSP25","SSP27","SSP27_S","SSP46","SSP4_CHP"],
+  113: ["SMG1_CHP","SSP18","SSP6_S","SSP8","XSP9_3","XSP9_6"],
+  115: ["JETBA2","SRJ10","SSP20_S"],
+  117: ["JETHUB1","SMG8_CHP","SPR6_CHP","SRJ12","SSC7","SSP21","XFBA1_1"],
+  119: ["IMISL1","SCE1","SES2","SSP17_S","SSP36","STO1","XFBA1_1"],
+  121: ["JETGO1","SES1","SMG8","SSC9"],
+  123: ["SMS2","SSP1","SSP15F","SSP39_S","SSP45_S"],
+  125: [],
+  127: ["SMG3","SRJ6","SRJ8","SSP38","SSP7_CHP"],
+  129: ["SRS4","SSP10","SSP6"],
+  131: ["SBA6","SRJ7","SSP24","XSP9_2"],
+  133: ["JETSL1","SSP15_S","SSP20","SSP45_CHP"],
+  135: ["SSP20","SSP8_S","STO2","XFBA1_1","XSP9_1_CHP"],
+  137: ["SGO2","SPR1","SSP29","SSP3","SSP38_S","STO2"],
+  139: ["SBA7","SGO1_X","SMG7","SRJ9","SSP23"],
+  141: ["SRJ13","SRS5","SSP34"],
+  143: ["SDF2","SGO1","SMG10","SMG15","SRS9","SSP1_CHP"],
+  145: ["SPR1_CHP","SSP26","SSP49_S","SSP7"],
+  147: ["SPR5","SRD2","SRJ14","SSP21_S"],
+  149: ["SMG1","SMG1_V","SPA1_X","SRS1_CHP","SSC5"],
+  151: ["LOGHUB","SMG1","SMR2","SSP31","SSP37","STO1","XSP9_1"],
+  152: ["SMG13","SMG13_X","SRS2"],
+  153: ["SDF1","SMG12","SPR8","SPR8_V","SRJ6_CHP","SSP29","SSP7_S"],
+  154: ["SBA3","SPE1","SPI1","SSP5"],
+  155: ["SPR6","SRJ2","SSC4","SSP16","SSP38","SSP38_V"],
+  156: ["SAL1_CHP","SMS1","SPA1","SPE1","SRD2"],
+  157: ["JADHUB","SBA2","SDF1","SDF1_V","SRJ4","SRS8","SRS8_V","SSP39"],
+  158: ["SAL1","SBA4","SMG2","SMG9","SSC2","SSP17","SSP17_V"],
+  159: ["SES3","SMG5","SSP11","SSP21_CHP","SSP28"],
+  160: ["SPR3","SSP12","SSP1_S","SSP30_V"],
+  161: ["SMG4","SPR7","SSP4","SSP5_S","XSP9_2_CHP"],
+  162: ["SES3_X","SMN1","SRJ3","SSP14","SSP27","SSP30"],
+  163: ["SMS2","SPR4","SRS3","SSP34_S","SSP40_CHP","SSP8"],
+  164: ["CVLHUB","SSP14","SSP18_CHP","XSP9_3_CHP"],
+  165: ["JETSL1","SMG11","SPI1","SSC8","SSP45","SSP45_V"],
+  166: ["SAM1_C","SFN1_C","SMN1_A","SPA1X_A","SPA1_A","SPI1_A"],
+  167: ["SMG9","SSC3","SSP18_S"],
+  168: ["SBA1_A","SGO1X_A","SMR1_A","SRN1_A","SRS8_A","SRS9_A"],
+  169: ["SRD1","SRS1","SSP22","SSP40_S","SSP48_S","XSP9_6_CHP"],
+  202: ["JETSL1","SES2","SPI1","SSC3","SSP48"],
+  204: ["SMG15","SRJ12","SRS3","SSP34","SSP39_S"],
+  206: ["SRD1","SRS8","SRS8_V","SSC5","SSP45","SSP45_V","SSP46"],
+  208: ["SBA7","SRS10","SSP10","SSP3","SSP40_CHP","SSP5_S"],
+  210: ["SAL1","SMR1","SPR4","SRJ5","SSP29"],
+  212: ["JETSL1","SDF2","SES1","SPR7","SSC4","SSP5"],
+  214: ["CVLHUB","SMG10","SMG1_CHP","SSP1","SSP13","SSP45_CHP","XFBA1_1"],
+  216: ["JETHUB1","SRD2","SRJ13","SSP21_S","SSP4"],
+  218: ["JETGO1","SMG11","SRJ4","SSP11","SSP18_CHP","SSP25"],
+  220: ["SGO2","SMR2","SPR5","SRJ7","SSP1_CHP","SSP23"],
+  222: ["SMG5","SMG9","SRS7","SSP17","SSP17_V","STO2","XSP9_2"],
+  224: ["SGO1_X","SRJ2","SRJ3_CHP","SRS4","SSC8","SSP37","XSP9_1_CHP"],
+  226: ["JETBA2","SAL1_CHP","SMG14","SPR2","SSP28","SSP6","SSP7_CHP","XFBA1_1"],
+  228: ["LOGHUB","SPR6","SRS5","SSP30","SSP30_V","SSP34"],
+  230: ["SMG1","SMG1_V","SMG8_CHP","SPR6_CHP","SSP15F","SSP16","SSP17_CHP","SSP34_S","SSP39"],
+  232: ["SBA6","SDF1","SDF1_V","SMG1","SRS1_CHP","SSP6_S","SSP7","XSP9_6"],
+  234: ["SMG9","SPR8","SPR8_V","SRJ10_CHP","SSC9","SSP20","XSP9_2_CHP"],
+  236: ["JADHUB","SBA2","SCE1","SMS2","SRS1","SSP27_S","SSP31"],
+  238: ["SMG12","SRS9_V","SSC7","SSP14","SSP40_S","SSP45_S"],
+  240: ["SBA1","SRJ6_CHP","SSP21_CHP","SSP49","SSP7_S","XFBA1_1"],
+  242: ["SPR1_CHP","SRJ8","SSP17_S","SSP18","SSP8","XSP9_6_CHP"],
+  244: ["SMG2","SMG7","SPR1","SSC1","SSP15_CHP","SSP38","SSP38_V","SSP48_S","SSP8_S","XSP9_3"],
+  246: ["SGO1","SMG8","SPR3","SRJ1","SRS9","SSP21"],
+  248: ["SMG7","SRJ9","SSP12_CHP","SSP1_S","SSP9","STO1"],
+  250: ["SMG3","SSP12","SSP20_S","SSP38_S","SSP40","SSP40_V","SSP4_CHP","XSP9_1"],
+  251: ["SES3_X","SMG6","SRJ3","SSC2","SSP15_S","SSP22","SSP36"],
+  252: ["SMR1","SRJ10","SRJ10_V","SSP18_S","SSP24","SSP36_S"],
+  253: ["SRJ1_CHP","SRJ6","SSP15","SSP26","SSP30_S","SSP5"],
+  254: ["SES3","SMG4","SPA1_X","SSP14","SSP22_CHP","SSP23_S","SSP27"],
+  255: ["SAM1_A","SES1_A","SJP1X_A","SMR2_A","SPE1_A"],
+  256: ["SAL1","SBA4","SMS1","XFBA1_1"],
+  257: ["SAL1_A","SBA6_A","SCE1_A","SDF1_A","SDF2_A","SGO1_A"],
+  258: ["SBA3","SMG13","SMN1","SPA1","SPE1","SPI1","SRD2"],
+  259: ["SBA2_A","SDF1_A","SJP1_A","SRS1_A","SSE1_A"],
+  260: ["SMG13_X","SRS2"]
+};
+
+const SEC1 = [169,167,165,163,161,159,157,155,153,151,149,147,145,143,141,139,137,135,133,131,129,127,125,123,121,119,117,115,113,111,109,107,105,103,101];
+const SEC1B = [168,166,164,162,160,158,156,154,152];
+const SEC2 = [202,204,206,208,210,212,214,216,218,220,222,224,226,228,230,232,234,236,238,240,242,244,246,248,250,252,254,256,258,260];
+const SEC2B = [249,251,253,255,257,259];
+
+let activeTobogas = new Set();
+const tooltip = document.getElementById('tooltip');
+
+function buildMap(containerId, tobogas, label) {
+  const container = document.getElementById(containerId);
+  const row = document.createElement('div');
+  row.className = 'tobogans-row';
+
+  tobogas.forEach((num, i) => {
+    if (i > 0 && i % 3 === 0) {
+      const div = document.createElement('div');
+      div.className = 'section-divider';
+      row.appendChild(div);
+    }
+    const t = document.createElement('div');
+    t.className = 'toboga';
+    t.dataset.num = num;
+    const canals = DATA[num] || [];
+    t.innerHTML = `<div class="t-num">${num}</div><div class="chute"></div>`;
+    t.addEventListener('mouseenter', e => showTooltip(e, num, canals));
+    t.addEventListener('mousemove', e => moveTooltip(e));
+    t.addEventListener('mouseleave', hideTooltip);
+    t.addEventListener('click', () => selectToboga(num, canals));
+    row.appendChild(t);
+  });
+
+  container.appendChild(row);
+}
+
+function showTooltip(e, num, canals) {
+  const empty = canals.length === 0 ? '<span style="color:#666">—</span>' : canals.map(c => `<span class="t-tag">${c}</span>`).join('');
+  tooltip.innerHTML = `<div class="t-title">Tobogã ${num} <span style="color:#666;font-size:0.7rem">(${canals.length})</span></div><div class="t-tags">${empty}</div>`;
+  tooltip.classList.add('visible');
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  let x = e.clientX + 16, y = e.clientY + 16;
+  if (x + 330 > window.innerWidth) x = e.clientX - 340;
+  if (y + 200 > window.innerHeight) y = e.clientY - 180;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+
+function hideTooltip() { tooltip.classList.remove('visible'); }
+
+function selectToboga(num, canals) {
+  document.querySelectorAll('.toboga').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`.toboga[data-num="${num}"]`).forEach(el => el.classList.add('active'));
+
+  const panel = document.getElementById('infoPanel');
+  panel.classList.add('visible');
+  document.getElementById('infoPanelTitle').textContent = `Tobogã ${num} — ${canals.length} canalizações`;
+  const tagsEl = document.getElementById('infoPanelTags');
+  tagsEl.innerHTML = canals.length === 0
+    ? '<span style="color:#666">Sem canalizações cadastradas</span>'
+    : canals.map(c => `<span class="big-tag">${c}</span>`).join('');
+}
+
+function buildTable() {
+  const tbody = document.getElementById('tableBody');
+  Object.entries(DATA).forEach(([num, canals]) => {
+    const tr = document.createElement('tr');
+    tr.dataset.num = num;
+    tr.innerHTML = `
+      <td>${num}</td>
+      <td class="canal-count">${canals.length}</td>
+      <td class="canal-list">${canals.join(', ') || '—'}</td>
+    `;
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('highlighted'));
+      tr.classList.add('highlighted');
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function buildStats() {
+  const nums = Object.values(DATA).map(c => c.length);
+  const total = nums.reduce((a,b) => a+b, 0);
+  const max = Math.max(...nums);
+  const avg = (total / nums.length).toFixed(1);
+
+  const cards = document.getElementById('statsCards');
+  [
+    [Object.keys(DATA).length, 'Tobogãs'],
+    [total, 'Canalizações totais'],
+    [avg, 'Média por tobogã'],
+    [max, 'Máx canalizações'],
+  ].forEach(([v,l]) => {
+    cards.innerHTML += `<div class="stat-card"><div class="s-val">${v}</div><div class="s-label">${l}</div></div>`;
+  });
+
+  const sorted = Object.entries(DATA).sort((a,b) => b[1].length - a[1].length).slice(0,10);
+  const topEl = document.getElementById('topList');
+  sorted.forEach(([num, canals]) => {
+    const pct = (canals.length / max * 100).toFixed(0);
+    topEl.innerHTML += `
+      <div class="top-item">
+        <span class="ti-num">${num}</span>
+        <div class="ti-bar-wrap"><div class="ti-bar" style="width:${pct}%"></div></div>
+        <span class="ti-count">${canals.length}</span>
+      </div>`;
+  });
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['map','table','stats'][i] === id);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+}
+
+// Search
+document.getElementById('search').addEventListener('input', function() {
+  const q = this.value.trim().toUpperCase();
+  const result = document.getElementById('searchResult');
+
+  document.querySelectorAll('.toboga').forEach(el => el.classList.remove('highlighted'));
+  document.querySelectorAll('#tableBody tr').forEach(el => el.classList.remove('highlighted'));
+
+  if (!q) { result.textContent = ''; return; }
+
+  const found = [];
+  Object.entries(DATA).forEach(([num, canals]) => {
+    if (canals.some(c => c.toUpperCase().includes(q))) found.push(num);
+  });
+
+  if (found.length) {
+    result.textContent = `→ Tobogã(s): ${found.join(', ')}`;
+    found.forEach(num => {
+      document.querySelectorAll(`.toboga[data-num="${num}"]`).forEach(el => el.classList.add('highlighted'));
+      const tr = document.querySelector(`#tableBody tr[data-num="${num}"]`);
+      if (tr) tr.classList.add('highlighted');
+    });
+  } else {
+    result.textContent = 'Não encontrado';
+    result.style.color = '#e05';
+  }
+});
+
+// Init
+buildMap('map1', [...SEC1], 'Seção 1 — Superior');
+buildMap('map2', SEC2, 'Seção 2');
+buildTable();
+buildStats();
+</script>
+</body>
+</html>
