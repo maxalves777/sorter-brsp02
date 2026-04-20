@@ -350,6 +350,7 @@
   <div class="tab active" onclick="switchTab('map')">🗺 Mapa Visual</div>
   <div class="tab" onclick="switchTab('table')">📋 Tabela</div>
   <div class="tab" onclick="switchTab('stats')">📊 Estatísticas</div>
+  <div class="tab" onclick="switchTab('shared')">🔁 Canalizações Compartilhadas</div>
 </div>
 
 <!-- MAP PANEL -->
@@ -389,6 +390,25 @@
   <div class="top-list">
     <h3>Top 10 — Tobogãs com mais canalizações</h3>
     <div id="topList"></div>
+  </div>
+</div>
+
+<!-- SHARED PANEL -->
+<div id="panel-shared" class="panel">
+  <div class="table-wrap">
+    <div style="margin-bottom:16px; font-size:0.8rem; color:var(--muted); font-family:'Syne',sans-serif;">
+      Canalizações que aparecem em <strong style="color:var(--yellow)">mais de um tobogã</strong> simultaneamente. Ordenado por maior número de tobogãs.
+    </div>
+    <table id="sharedTable">
+      <thead>
+        <tr>
+          <th>Canalização</th>
+          <th>Qtd Tobogãs</th>
+          <th>Tobogãs</th>
+        </tr>
+      </thead>
+      <tbody id="sharedBody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -560,6 +580,8 @@ function buildTable() {
 }
 
 function buildStats() {
+  const allCanals = Object.values(DATA).flat();
+  const unique = new Set(allCanals);
   const nums = Object.values(DATA).map(c => c.length);
   const total = nums.reduce((a,b) => a+b, 0);
   const max = Math.max(...nums);
@@ -568,7 +590,7 @@ function buildStats() {
   const cards = document.getElementById('statsCards');
   [
     [Object.keys(DATA).length, 'Tobogãs'],
-    [total, 'Canalizações totais'],
+    [unique.size, 'Canalizações únicas'],
     [avg, 'Média por tobogã'],
     [max, 'Máx canalizações'],
   ].forEach(([v,l]) => {
@@ -588,9 +610,42 @@ function buildStats() {
   });
 }
 
+function buildShared() {
+  const canalMap = {};
+  Object.entries(DATA).forEach(([num, canals]) => {
+    canals.forEach(c => {
+      canalMap[c] = canalMap[c] || [];
+      canalMap[c].push(num);
+    });
+  });
+  const shared = Object.entries(canalMap)
+    .filter(([, t]) => t.length > 1)
+    .sort((a, b) => b[1].length - a[1].length);
+
+  const tbody = document.getElementById('sharedBody');
+  shared.forEach(([canal, tobogans], i) => {
+    const tr = document.createElement('tr');
+    const fill = i % 2 === 0 ? '' : 'style="background:rgba(255,255,255,0.02)"';
+    const badges = tobogans.sort((a,b)=>a-b).map(t =>
+      `<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:0.7rem;margin:2px;cursor:pointer"
+        onclick="switchTab('map');setTimeout(()=>selectTobogaByNum(${t}),100)">${t}</span>`
+    ).join('');
+    tr.innerHTML = `
+      <td style="color:var(--yellow);font-weight:700">${canal}</td>
+      <td class="canal-count" style="color:${tobogans.length>=4?'#f44':tobogans.length>=3?'#fa0':'var(--green)'};font-weight:700">${tobogans.length}x</td>
+      <td>${badges}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function selectTobogaByNum(num) {
+  const canals = DATA[num] || [];
+  selectToboga(num, canals);
+}
+
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['map','table','stats'][i] === id);
+    t.classList.toggle('active', ['map','table','stats','shared'][i] === id);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
@@ -629,6 +684,7 @@ buildMap('map1', [...SEC1], 'Seção 1 — Superior');
 buildMap('map2', SEC2, 'Seção 2');
 buildTable();
 buildStats();
+buildShared();
 </script>
 </body>
 </html>
